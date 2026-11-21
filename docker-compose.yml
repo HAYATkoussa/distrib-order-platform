@@ -1,0 +1,33 @@
+services:
+  db-catalogue:
+    image: postgres:16-alpine
+    container_name: db-catalogue
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: catalogue_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - db_catalogue_data:/var/lib/postgresql/data
+    networks:
+      - distrib-net
+
+  service-produits:
+    build: ./service-produits
+    container_name: service-produits
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db-catalogue:5432/catalogue_db
+    ports:
+      - "8001:8001"
+    depends_on:
+      - db-catalogue
+    networks:
+      - distrib-net
+
+networks:
+  distrib-net:
+    driver: bridge
+
+volumes:
+  db_catalogue_data:
