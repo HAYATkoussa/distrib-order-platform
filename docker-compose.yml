@@ -1,4 +1,8 @@
+# docker-compose.yml fusionné : Catalogue (service-produits) + Commandes + Stocks.
+# Chaque service a SA base. Les services se joignent par leur nom (jamais localhost).
+
 services:
+  # ---------- Catalogue (déjà dans le dépôt) ----------
   db-catalogue:
     image: postgres:16-alpine
     container_name: db-catalogue
@@ -25,9 +29,64 @@ services:
     networks:
       - distrib-net
 
+  # ---------- Commandes (ajouté) ----------
+  db-commandes:
+    image: postgres:16-alpine
+    container_name: db-commandes
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+      POSTGRES_DB: orders
+    ports:
+      - "5435:5432"
+    volumes:
+      - db_commandes_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - distrib-net
+
+  service-commandes:
+    build: ./service-commandes
+    container_name: service-commandes
+    environment:
+      DATABASE_URL: postgresql+psycopg2://orders:orders@db-commandes:5432/orders
+      CATALOGUE_URL: http://service-produits:8001
+      STOCKS_URL: http://stocks-notifications:8003
+      HTTP_TIMEOUT: "3"
+    ports:
+      - "8002:8002"
+    depends_on:
+      db-commandes:
+        condition: service_healthy
+      service-produits:
+        condition: service_started
+      stocks-notifications:
+        condition: service_started
+    networks:
+      - distrib-net
+
+  # ---------- Stocks et notifications ----------
+  # TEMPORAIRE : faux Stocks (même image que Commandes) en attendant le vrai service.
+  # Quand le Membre 3 livre son dossier, remplacer ce bloc par :
+  #   build: ./service-stocks     (ou son nom de dossier)
+  #   avec sa propre base db-stocks, en gardant le nom "stocks-notifications" et le port 8003.
+  stocks-notifications:
+    build: ./service-commandes
+    container_name: stocks-notifications
+    command: ["uvicorn", "mocks.fake_services:stocks", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "8003:8003"
+    networks:
+      - distrib-net
+
 networks:
   distrib-net:
     driver: bridge
 
 volumes:
   db_catalogue_data:
+  db_commandes_data:
